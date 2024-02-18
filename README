@@ -1,0 +1,10 @@
+image-manage is helper tool for managing vm templates on s3 storage
+
+# build 
+go build
+
+# show program argument help
+./image-manager -h
+
+# write example configuration to file
+./image-manager -write_example_config -config_path ./example_config.json

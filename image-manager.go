@@ -122,9 +122,13 @@ func s3_check_object_expiry( bucket string, object string, remove_expired bool )
 			fmt.Println( objInfo.LastModified )
 		}
 		if  time.Now().After( objInfo.LastModified.Add( time.Hour * time.Duration( config.DefaultExpiryTime ))) {
-			fmt.Printf("%s/%s expired", bucket, object)
+			if ! quiet {
+				fmt.Printf("%s/%s expired\n", bucket, object)
+			}
 			if remove_expired {
-				log.Printf("Removing object %s/%s\n", bucket, object)
+				if ! quiet {
+					fmt.Printf("Removing object %s/%s\n", bucket, object)
+				}
 				ctx, cancelCtx := context.WithTimeout( context.Background(), time.Duration( config.DefaultTimeoutMS ) * time.Millisecond )
 				defer cancelCtx()
 				err := s3_client.RemoveObject(ctx, bucket, object, minio.RemoveObjectOptions{} )
@@ -132,10 +136,14 @@ func s3_check_object_expiry( bucket string, object string, remove_expired bool )
 					log.Printf("Error while deleting object %s/%s : %s\n", bucket, object, err)
 				}
 			}
-			return( true )
+			//return( true )
+			os.Exit(1)
 		}else{
-			fmt.Printf("%s/%s not-expired", bucket, object)
+			if ! quiet {
+				fmt.Printf("%s/%s not-expired\n", bucket, object)
+			}
 			return( false )
+			os.Exit(0)
 		}
 	}
 	return( false )
@@ -149,6 +157,7 @@ var cmdline_bucket string
 var cmdline_object string
 var remove_expired bool
 var debug bool
+var quiet bool
 
 func main() {
 	
@@ -168,12 +177,14 @@ func main() {
 	flag.BoolVar( &check_obj_expiry, "check_obj_expiry", false, "check if image is over -expiry threshold")
 	flag.BoolVar( &remove_expired, "remove_expired", false, "remove object if image is over -expiry threshold")
 	flag.UintVar( &expiry_hours, "expiry_hours", 48, "image expiry time in hours")
+	flag.BoolVar( &quiet, "quiet", false, "run in quiet mode")
 	flag.StringVar( &cmdline_bucket, "bucket", "my-bucket", "bucket name")
 	flag.StringVar( &cmdline_object, "object", "my-image", "path to image object")
 	flag.Parse()
 	flagset := make(map[string]bool)
 	flag.Visit(func(f *flag.Flag) { flagset[f.Name]=true } )
 	if debug {
+		quiet = false
 		log.Printf("%+v\n", flagset)
 	}
 	
@@ -182,12 +193,17 @@ func main() {
 		write_example_config( config_path )
 		log.Printf( "writing example config to %s\n", config_path )
 		os.Exit(0)
-	}else if b_write_example_config || flagset["config_path"] { 
+	}else if b_write_example_config && ! flagset["config_path"] { 
 		log.Println( "Cannot write example config without -config_path\n" )
 		os.Exit(2)
 	}
 	
-	load_config( "./config.json" )
+	if flagset["config_path"] {
+		load_config( config_path )
+	}else{
+		load_config( "./config.json" )
+	}
+	
 	if debug {
 		log.Printf("config: %+v\n", config)
 	}
@@ -198,7 +214,7 @@ func main() {
 	if flagset[ "expiry_hours" ] {
 		config.DefaultExpiryTime = expiry_hours
 	}
-
+	
 	if check_obj_expiry{
 		if ! flagset["object"] {
 			log.Println( "missing -object provide object name to check" )
